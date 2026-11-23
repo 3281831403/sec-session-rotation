@@ -1,4 +1,4 @@
-登录前后会话 ID 没换，被人抓住一个固定 ID 就直接接管了账号：new_id 用 random.random() 产生会话 ID，熵源可预测；new_id 只对 user 做哈希，同一用户在不同时间会得到同一个 ID；rotate 返回新 ID 却不删除旧 ID，旧 ID 仍然有效；rotate 复用旧 ID 的 TTL，不重置过期时间；bind 不记录创建时间，TTL 无法判定；validate 不比较绑定用户，A 的 ID 可以访问 B 的会话；validate 用 now - created > ttl 判定但毫秒与秒混用，过期判断失效；replay_guard 使用模块级固定 nonce 集合，重启后丢失重放窗口；invalidate_all 只删当前用户的一条会话，其他端仍然在线；session_batch 复用同一个 store，第二用户的事件会命中第一用户会话。session/rotation.py 是核心，tests/test_rotation.py 15个红。要修的是：new_id 的密码学熵源与固定长度，rotate 的旧 ID 立即失效、TTL 重置与并发单赢家，bind 的 created_at 与 TTL，validate 的绑定用户、毫秒/秒归一化与零容差，replay_guard 的持久化 nonce，invalidate_all 的全端清理，validate_store 的重复/过期/无绑定检查，以及 session_batch 的用户隔离与时间顺序。
+登录前后会话 ID 没换，被人抓住一个固定 ID 就直接接管了账号：会话 ID 用可预测的随机数生成；ID 只由用户标识派生，同一用户每次登录都拿到同一个值；登录后轮换生成了新 ID 但旧 ID 没有被删除，旧 ID 仍然可用；轮换没有重置过期时间，沿用旧 ID 的剩余寿命；绑定时不记录创建时间，过期判断没有依据；有效性校验不比对绑定用户，A 的 ID 可以访问 B 的会话；过期判断里秒和毫秒混用，过期窗口完全失效；重放检测用内存里的固定集合，重启后丢失窗口；全端下线只删当前一条会话，其他设备仍然在线；批量处理复用会话存储，后一个用户的事件命中前一个用户的会话。session/rotation.py 是核心，tests/test_rotation.py 15个红。要修的是：按上面的顺序把 10 个缺陷逐个修掉。
 
 ## 运行方式与初始状态
 
